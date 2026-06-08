@@ -1,31 +1,7 @@
 {{/*
-Default always defined valueFiles to be included when pushing the cluster wide argo application via acm
+Default always defined top-level variables for helm charts
 */}}
-{{- define "acm.app.policies.valuefiles" -}}
-- "/values-global.yaml"
-- "/values-{{ .name }}.yaml"
-- '/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}.yaml'
-- '/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}-{{ `{{ printf "%d.%d" ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Major) ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Minor) }}` }}.yaml'
-- '/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}-{{ .name }}.yaml'
-# We cannot use $.Values.global.clusterVersion because that gets resolved to the
-# hub's cluster version, whereas we want to include the spoke cluster version
-- '/values-{{ `{{ printf "%d.%d" ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Major) ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Minor) }}` }}-{{ .name }}.yaml'
-- '/values-{{ `{{ (split "." (lookup "config.openshift.io/v1" "Ingress" "" "cluster").spec.domain)._1 }}` }}.yaml'
-{{- end }} {{- /*acm.app.policies.valuefiles */}}
-
-{{- define "acm.app.policies.multisourcevaluefiles" -}}
-- "$patternref/values-global.yaml"
-- "$patternref/values-{{ .name }}.yaml"
-- '$patternref/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}.yaml'
-- '$patternref/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}-{{ `{{ printf "%d.%d" ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Major) ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Minor) }}` }}.yaml'
-- '$patternref/values-{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}-{{ .name }}.yaml'
-# We cannot use $.Values.global.clusterVersion because that gets resolved to the
-# hub's cluster version, whereas we want to include the spoke cluster version
-- '$patternref/values-{{ `{{ printf "%d.%d" ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Major) ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Minor) }}` }}-{{ .name }}.yaml'
-- '$patternref/values-{{ `{{ (split "." (lookup "config.openshift.io/v1" "Ingress" "" "cluster").spec.domain)._1 }}` }}.yaml'
-{{- end }} {{- /*acm.app.policies.multisourcevaluefiles */}}
-
-{{- define "acm.app.policies.helmparameters" -}}
+{{- define "clustergroup.app.globalvalues.helmparameters" -}}
 - name: global.repoURL
   value: {{ $.Values.global.repoURL }}
 - name: global.originURL
@@ -36,231 +12,323 @@ Default always defined valueFiles to be included when pushing the cluster wide a
   value: $ARGOCD_APP_NAMESPACE
 - name: global.pattern
   value: {{ $.Values.global.pattern }}
+- name: global.clusterDomain
+  value: {{ $.Values.global.clusterDomain }}
+- name: global.localClusterName
+  value: {{ $.Values.global.localClusterName }}
+- name: global.clusterVersion
+  value: "{{ $.Values.global.clusterVersion }}"
+- name: global.clusterPlatform
+  value: "{{ $.Values.global.clusterPlatform }}"
 - name: global.hubClusterDomain
   value: {{ $.Values.global.hubClusterDomain }}
-- name: global.localClusterDomain
-  value: '{{ `{{ (lookup "config.openshift.io/v1" "Ingress" "" "cluster").spec.domain }}` }}'
-- name: global.clusterDomain
-  value: '{{ `{{ (lookup "config.openshift.io/v1" "Ingress" "" "cluster").spec.domain | replace "apps." "" }}` }}'
-- name: global.clusterVersion
-  value: '{{ `{{ printf "%d.%d" ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Major) ((semver (index (lookup "config.openshift.io/v1" "ClusterVersion" "" "version").status.history 0).version).Minor) }}` }}'
-- name: global.localClusterName
-  value: '{{ `{{ (split "." (lookup "config.openshift.io/v1" "Ingress" "" "cluster").spec.domain)._1 }}` }}'
-- name: global.clusterPlatform
-  value: '{{ `{{ (lookup "config.openshift.io/v1" "Infrastructure" "" "cluster").spec.platformSpec.type }}` }}'
 - name: global.multiSourceSupport
   value: {{ $.Values.global.multiSourceSupport | quote }}
 - name: global.multiSourceRepoUrl
   value: {{ $.Values.global.multiSourceRepoUrl }}
 - name: global.multiSourceTargetRevision
   value: {{ $.Values.global.multiSourceTargetRevision }}
+- name: global.localClusterDomain
+  value: {{ coalesce $.Values.global.localClusterDomain $.Values.global.hubClusterDomain }}
 - name: global.privateRepo
   value: {{ $.Values.global.privateRepo | quote }}
 - name: global.experimentalCapabilities
-  value: {{ $.Values.global.experimentalCapabilities }}
-{{/*
-if this chart gets DeleteSpokeChildApps, it will set deletePattern to DeleteChildApps to remove the child apps from spokes
-*/}}
+  value: {{ $.Values.global.experimentalCapabilities | default "" }}
 - name: global.deletePattern
-  {{- if eq $.Values.global.deletePattern "DeleteSpokeChildApps" }}
-  value: DeleteChildApps
-  {{- else }}
   value: {{ $.Values.global.deletePattern }}
-  {{- end }}
 - name: global.gitOpsSubNamespace
-  value: {{ $.Values.global.gitOpsSubNamespace }}
+  value: {{ $.Values.global.gitOpsSubNamespace | default "" }}
 - name: global.vpArgoNamespace
   value: {{ $.Values.global.vpArgoNamespace }}
-{{- end }} {{- /*acm.app.policies.helmparameters */}}
+{{- end }} {{/* clustergroup.globalvaluesparameters */}}
 
-{{- define "acm.app.clusterSelector" -}}
-{{- $cs := .clusterSelector -}}
-{{- $g  := default (dict) .group -}}
-{{- $rawLabels := get $g "acmlabels" -}}
-{{- $isSlice := kindIs "slice" $rawLabels -}}
-{{- $isMap   := kindIs "map"   $rawLabels -}}
-{{- $hasAny  := and $rawLabels (gt (len $rawLabels) 0) -}}
-{{- if $cs -}}
-predicates:
-  - requiredClusterSelector:
-      labelSelector: {{ $cs | toPrettyJson | nindent 8 }}
-{{- else if not $hasAny -}}
-predicates:
-  - requiredClusterSelector:
-      labelSelector:
-        matchExpressions:
-          - key: local-cluster
-            operator: NotIn
-            values:
-              - 'true'
-        matchLabels:
-          clusterGroup: {{ $g.name }}
-{{- else if $isSlice -}}
-predicates:
-  - requiredClusterSelector:
-      labelSelector:
-        matchExpressions:
-          - key: local-cluster
-            operator: NotIn
-            values:
-              - 'true'
-        matchLabels:
-{{- range $rawLabels }}
-          {{ .name }}: {{ .value }}
+
+{{/*
+Default always defined valueFiles to be included in Applications
+*/}}
+{{- define "clustergroup.app.globalvalues.valuefiles" -}}
+- "/values-global.yaml"
+- "/values-{{ $.Values.clusterGroup.name }}.yaml"
+{{- if $.Values.global.clusterPlatform }}
+- "/values-{{ $.Values.global.clusterPlatform }}.yaml"
+  {{- if $.Values.global.clusterVersion }}
+- "/values-{{ $.Values.global.clusterPlatform }}-{{ $.Values.global.clusterVersion }}.yaml"
+  {{- end }}
+- "/values-{{ $.Values.global.clusterPlatform }}-{{ $.Values.clusterGroup.name }}.yaml"
 {{- end }}
-{{- else if $isMap -}}
-predicates:
-  - requiredClusterSelector:
-      labelSelector:
-        matchExpressions:
-          - key: local-cluster
-            operator: NotIn
-            values:
-              - 'true'
-        matchLabels:
-{{- range $k, $v := $rawLabels }}
-          {{ $k }}: {{ $v }}
+{{- if $.Values.global.clusterVersion }}
+- "/values-{{ $.Values.global.clusterVersion }}-{{ $.Values.clusterGroup.name }}.yaml"
 {{- end }}
-{{- else -}} {{- /* Fallback: unknown acmlabels shape then default to group */}}
-predicates:
-  - requiredClusterSelector:
-      labelSelector:
-        matchExpressions:
-          - key: local-cluster
-            operator: NotIn
-            values:
-              - 'true'
-        matchLabels:
-          clusterGroup: {{ $g.name }}
-{{- end -}}
-{{- end -}} {{- /*acm.app.clusterSelector */}}
+{{- if $.Values.global.localClusterName }}
+- "/values-{{ $.Values.global.localClusterName }}.yaml"
+{{- end }}
+{{- if $.Values.global.extraValueFiles }}
+{{- range $.Values.global.extraValueFiles }}
+- {{ . | quote }}
+{{- end }} {{/* range $.Values.global.extraValueFiles */}}
+{{- end }} {{/* if $.Values.global.extraValueFiles */}}
+{{- end }} {{/* clustergroup.app.globalvalues.valuefiles */}}
 
-{{/* Please make sure that these healthchecks are the same in the operator code */}}
-{{- define "acm.default.healthchecks" -}}
-- group: operators.coreos.com
-  kind: Subscription
-  check: |
-    local health_status = {}
-    if obj.status ~= nil then
-      if obj.status.conditions ~= nil then
-        local numDegraded = 0
-        local numPending = 0
-        local msg = ""
+{{- define "clustergroup.sharedvaluefiles" -}}
+{{- $app := index . 0 }}
+{{- $root := index . 1 }}
+{{- range $valueFile := $root.Values.clusterGroup.sharedValueFiles }}
+{{- $resolvedFile := tpl $valueFile $root }}
+{{- if hasPrefix "$patternref/" $resolvedFile }}
+- {{ $resolvedFile | quote }}
+{{- else }}
+- {{ printf "$patternref%s" $resolvedFile | quote }}
+{{- end }}
+{{- end }}
+{{- end }} {{- /* clustergroup.sharedvaluefiles */}}
 
-        -- Check if this is a manual approval scenario where InstallPlanPending is expected
-        -- and the operator is already installed (upgrade pending, not initial install)
-        local isManualApprovalPending = false
-        if obj.spec ~= nil and obj.spec.installPlanApproval == "Manual" then
-          for _, condition in pairs(obj.status.conditions) do
-            if condition.type == "InstallPlanPending" and condition.status == "True" and condition.reason == "RequiresApproval" then
-              -- Only treat as expected healthy state if the operator is already installed
-              -- (installedCSV is present), meaning this is an upgrade pending approval
-              if obj.status.installedCSV ~= nil then
-                isManualApprovalPending = true
-              end
-              break
-            end
-          end
-        end
+{{- define "clustergroup.app.extravaluefiles" -}}
+{{- $app := index . 0 }}
+{{- $root := index . 1 }}
+{{- range $valueFile := $app.extraValueFiles }}
+{{- $resolvedFile := tpl $valueFile $root }}
+{{- if hasPrefix "$patternref/" $resolvedFile }}
+- {{ $resolvedFile | quote }}
+{{- else }}
+- {{ printf "$patternref%s" $resolvedFile | quote }}
+{{- end }}
+{{- end }}
+{{- end }} {{- /* clustergroup.app.extravaluefiles */}}
 
-        for i, condition in pairs(obj.status.conditions) do
-          -- Skip InstallPlanPending condition when manual approval is pending (expected behavior)
-          if isManualApprovalPending and condition.type == "InstallPlanPending" then
-            -- Do not include in message or count as pending
-          else
-            msg = msg .. i .. ": " .. condition.type .. " | " .. condition.status .. "\n"
-            if condition.type == "InstallPlanPending" and condition.status == "True" then
-              numPending = numPending + 1
-            elseif (condition.type == "InstallPlanMissing" and condition.reason ~= "ReferencedInstallPlanNotFound") then
-              numDegraded = numDegraded + 1
-            elseif (condition.type == "CatalogSourcesUnhealthy" or condition.type == "InstallPlanFailed" or condition.type == "ResolutionFailed") and condition.status == "True" then
-              numDegraded = numDegraded + 1
-            end
-          end
-        end
+{{/*
+Default always defined valueFiles to be included in Applications but with a prefix called $patternref
+*/}}
+{{- define "clustergroup.app.globalvalues.prefixedvaluefiles" -}}
+- "$patternref/values-global.yaml"
+- "$patternref/values-{{ $.Values.clusterGroup.name }}.yaml"
+{{- if $.Values.global.clusterPlatform }}
+- "$patternref/values-{{ $.Values.global.clusterPlatform }}.yaml"
+  {{- if $.Values.global.clusterVersion }}
+- "$patternref/values-{{ $.Values.global.clusterPlatform }}-{{ $.Values.global.clusterVersion }}.yaml"
+  {{- end }}
+- "$patternref/values-{{ $.Values.global.clusterPlatform }}-{{ $.Values.clusterGroup.name }}.yaml"
+{{- end }}
+{{- if $.Values.global.clusterVersion }}
+- "$patternref/values-{{ $.Values.global.clusterVersion }}-{{ $.Values.clusterGroup.name }}.yaml"
+{{- end }}
+{{- if $.Values.global.localClusterName }}
+- "$patternref/values-{{ $.Values.global.localClusterName }}.yaml"
+{{- end }}
+{{- if $.Values.global.extraValueFiles }}
+{{- range $.Values.global.extraValueFiles }}
+- "$patternref/{{ . }}"
+{{- end }} {{/* range $.Values.global.extraValueFiles */}}
+{{- end }} {{/* if $.Values.global.extraValueFiles */}}
+{{- end }} {{/* clustergroup.app.globalvalues.prefixedvaluefiles */}}
 
-        -- Available states: undef/nil, UpgradeAvailable, UpgradePending, UpgradeFailed, AtLatestKnown
-        -- Source: https://github.com/openshift/operator-framework-olm/blob/5e2c73b7663d0122c9dc3e59ea39e515a31e2719/staging/api/pkg/operators/v1alpha1/subscription_types.go#L17-L23
-        if obj.status.state == nil  then
-          numPending = numPending + 1
-          msg = msg .. ".status.state not yet known\n"
-        elseif obj.status.state == "" or obj.status.state == "UpgradeAvailable" then
-          numPending = numPending + 1
-          msg = msg .. ".status.state is '" .. obj.status.state .. "'\n"
-        elseif obj.status.state == "UpgradePending" then
-          -- UpgradePending with manual approval is expected behavior, treat as healthy
-          if isManualApprovalPending then
-            msg = msg .. ".status.state is 'AtLatestKnown'\n"
-          else
-            numPending = numPending + 1
-            msg = msg .. ".status.state is '" .. obj.status.state .. "'\n"
-          end
-        elseif obj.status.state == "UpgradeFailed" then
-          numDegraded = numDegraded + 1
-          msg = msg .. ".status.state is '" .. obj.status.state .. "'\n"
-        else
-          -- Last possiblity of .status.state: AtLatestKnown
-          msg =  msg .. ".status.state is '" .. obj.status.state .. "'\n"
-        end
+{{/*
+Helper function to generate AppProject from a map object
+Called from common/clustergroup/templates/plumbing/projects.yaml
+*/}}
+{{- define "clustergroup.template.plumbing.projects.map" -}}
+{{- $projects := index . 0 }}
+{{- $namespace := index . 1 }}
+{{- $enabled := index . 2 }}
+{{- $argoNamespace := index . 3 }}
+{{- range $k, $v := $projects}}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ $k }}
+{{- if (eq $enabled "plumbing") }}
+  namespace: {{ $argoNamespace }}
+{{- else }}
+  namespace: {{ $namespace }}
+{{- end }}
+spec:
+  description: "Pattern {{ . }}"
+  destinations:
+  - namespace: '*'
+    server: '*'
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  sourceRepos:
+  - '*'
+status: {}
+---
+{{- end }}
+{{- end }}
 
-        if numDegraded == 0 and numPending == 0 then
-          health_status.status = "Healthy"
-          health_status.message = msg
-          return health_status
-        elseif numPending > 0 and numDegraded == 0 then
-          health_status.status = "Progressing"
-          health_status.message = msg
-          return health_status
-        else
-          health_status.status = "Degraded"
-          health_status.message = msg
-          return health_status
-        end
-      end
-    end
-    health_status.status = "Progressing"
-    health_status.message = "An install plan for a subscription is pending installation"
-    return health_status
-- kind: PersistentVolumeClaim
-  check: |
-    hs = {}
-    if obj.status ~= nil then
-      if obj.status.phase ~= nil then
-        if obj.status.phase == "Pending" then
-          hs.status = "Healthy"
-          hs.message = obj.status.phase
-          return hs
-        elseif obj.status.phase == "Bound" then
-          hs.status = "Healthy"
-          hs.message = obj.status.phase
-          return hs
-        end
-      end
-    end
-    hs.status = "Progressing"
-    hs.message = "Waiting for PVC"
-    return hs
-{{- end }} {{- /*acm.default.healthchecks */}}
+{{/*
+  Helper function to generate AppProject from a list object.
+  Called from common/clustergroup/templates/plumbing/projects.yaml
+*/}}
+{{- define "clustergroup.template.plumbing.projects.list" -}}
+{{- $projects := index . 0 }}
+{{- $namespace := index . 1 }}
+{{- $enabled := index . 2 }}
+{{- $argoNamespace := index . 3 }}
+{{- range $projects}}
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: {{ . }}
+{{- if (eq $enabled "plumbing") }}
+  namespace: {{ $argoNamespace }}
+{{- else }}
+  namespace: {{ $namespace }}
+{{- end }}
+spec:
+  description: "Pattern {{ . }}"
+  destinations:
+  - namespace: '*'
+    server: '*'
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  sourceRepos:
+  - '*'
+status: {}
+{{- end }}
+{{- end }}
+
+{{/*
+  Helper function to generate Namespaces from a map object.
+  Arguments passed as a list object are:
+  0 - The namespace hash keys
+  1 - Pattern name from .Values.global.pattern
+  2 - Cluster group name from .Values.clusterGroup.name
+  Called from common/clustergroup/templates/core/namespaces.yaml
+*/}}
+{{- define "clustergroup.template.core.namespaces.map" -}}
+{{- $ns := index . 0 }}
+{{- $patternName := index . 1 }}
+{{- $clusterGroupName := index . 2 }}
+{{- $root := index . 3 }}
+
+{{- range $k, $v := $ns }}{{- /* We loop here even though the map has always just one key */}}
+{{- if or (eq $v nil) (not $v.disabled) }} {{- /* Process if $v is nil or disabled is false */}}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $k }}
+  {{- if ne $v nil }}
+  labels:
+    argocd.argoproj.io/managed-by: {{ include "clustergroup.template.argocdnamespace" $root }}
+    {{- if $v.labels }}
+    {{- range $key, $value := $v.labels }} {{- /* We loop here even though the map has always just one key */}}
+    {{ $key }}: {{ $value | default "" | quote }}
+    {{- end }}
+    {{- end }}
+  {{- include "clustergroup.annotations" $v.annotations | nindent 2 }}
+  {{- else }}
+  labels:
+    argocd.argoproj.io/managed-by: {{ include "clustergroup.template.argocdnamespace" $root }}
+  {{- end }}
+spec:
+{{- end }}{{- /* if not disabled */}}
+{{- end }}{{- /* range $k, $v := $ns */}}
+{{- end }}
+
+{{- /*
+  Helper function to generate OperatorGroup from a map object.
+  Arguments passed as a list object are:
+  0 - The namespace hash keys
+  1 - The operatorExcludes section from .Values.clusterGroup.operatorgroupExcludes
+  Called from common/clustergroup/templates/core/operatorgroup.yaml
+*/ -}}
+{{- define "clustergroup.template.core.operatorgroup.map" -}}
+{{- $ns := index . 0 }}
+{{- $operatorgroupExcludes := index . 1 }}
+{{- if or (empty $operatorgroupExcludes) (not (has . $operatorgroupExcludes)) }}
+  {{- range $k, $v := $ns }}{{- /* We loop here even though the map has always just one key */}}
+  {{- if or (eq $v nil) (not $v.disabled) }} {{- /* Process if $v is nil or disabled is false */}}
+  {{- if $v }}
+    {{- if or $v.operatorGroup (not (hasKey $v "operatorGroup")) }}{{- /* Checks if the user sets operatorGroup: false */}}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: {{ $k }}-operator-group
+  namespace: {{ $k }}
+      {{- if (hasKey $v "targetNamespaces") }}
+        {{- if $v.targetNamespaces }}
+          {{- if (len $v.targetNamespaces) }}
+spec:
+  targetNamespaces:
+            {{- range $v.targetNamespaces }}{{- /* We loop through the list of tergetnamespaces */}}
+  - {{ . }}
+            {{- end }}{{- /* End range targetNamespaces */}}
+          {{- end }}{{- /* End if (len $v.targetNamespaces) */}}
+        {{- end }}{{- /* End $v.targetNamespaces */}}
+      {{- else }}
+spec:
+  targetNamespaces:
+  - {{ $k }}
+      {{- end }}{{- /* End of if hasKey $v "targetNamespaces" */}}
+    {{- end }}{{- /* End if $v.operatorGroup */}}
+  {{- else }}{{- /* else if $v == nil  */}}
+---
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: {{ $k }}-operator-group
+  namespace: {{ $k }}
+spec:
+  targetNamespaces:
+  - {{ $k }}
+  {{- end }}{{- /* end if $v */}}
+  {{- end }}{{- /* if not disabled */}}
+  {{- end }}{{- /* End range $k, $v = $ns */}}
+{{- end }}{{- /* End of if operatorGroupExcludes */}}
+{{- end }} {{- /* End define  "clustergroup.template.core.operatorgroup.map" */}}
+
+{{/*
+Renders annotations from a given context
+Usage: {{ include "clustergroup.annotations" .annotations }}
+*/}}
+{{- define "clustergroup.annotations" -}}
+{{- if . }}
+annotations:
+  {{- range $key, $value := . }}
+  {{ $key }}: {{ $value | default "" | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}
 
 {{/*
 Determines if the current cluster is a hub cluster.
-First checks if clusterGroup.isHubCluster is explicitly set and uses that value.
-If not set, falls back to comparing global.localClusterDomain and global.hubClusterDomain.
+First checks if clusterGroup.isHubCluster is explicitly set (and not null) and uses that value.
+If not set or null, falls back to comparing global.localClusterDomain and global.hubClusterDomain.
 If domains are equal or localClusterDomain is not set (defaults to hubClusterDomain), this is a hub cluster.
-Usage: {{ include "acm.ishubcluster" . }}
+Usage: {{ include "clustergroup.ishubcluster" . }}
 Returns: "true" or "false" as a string
 */}}
-{{- define "acm.ishubcluster" -}}
+{{- define "clustergroup.ishubcluster" -}}
 {{- if and (hasKey .Values.clusterGroup "isHubCluster") (not (kindIs "invalid" .Values.clusterGroup.isHubCluster)) -}}
-{{- .Values.clusterGroup.isHubCluster | toString -}}
+  {{- .Values.clusterGroup.isHubCluster | toString -}}
 {{- else if $.Values.global.hubClusterDomain -}}
-{{- $localDomain := coalesce $.Values.global.localClusterDomain $.Values.global.hubClusterDomain -}}
-{{- if eq $localDomain $.Values.global.hubClusterDomain -}}
+  {{- $localDomain := coalesce $.Values.global.localClusterDomain $.Values.global.hubClusterDomain -}}
+  {{- if eq $localDomain $.Values.global.hubClusterDomain -}}
 true
-{{- else -}}
+  {{- else -}}
 false
-{{- end -}}
+  {{- end -}}
 {{- else -}}
 false
 {{- end -}}
 {{- end }}
+
+{{- /*
+  Helper function to generate argocd namespace name
+*/ -}}
+{{- define "clustergroup.template.argocdnamespace" -}}
+{{- if .Values.global.singleArgoCD }}
+{{- .Values.global.vpArgoNamespace -}}
+{{- else }}
+{{- .Values.global.pattern }}-{{ .Values.clusterGroup.name -}}
+{{- end }}{{- /* if .singleArgoCD */}}
+{{- end }} {{- /* End define  "clustergroup.template.argocdnamespace" */}}
