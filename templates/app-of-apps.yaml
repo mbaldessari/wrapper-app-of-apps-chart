@@ -1,15 +1,10 @@
 {{- if ($.Values.global.deletePattern | ne "DeleteChildApps") }} {{- /* When a pattern is deleting applications should be removed */}}
 {{- $namespace := include "clustergroup.template.argocdnamespace" . | trim }}
-{{- range .Values.clusterGroup.applications }}
-{{- if . }} {{- /* Skip null applications */}}
-{{- $projectName := coalesce .argoProject .project "default" -}} {{- /* Read argoProject if set, otherwise .project and otherwise set it to "default" */}}
-{{- if .disabled }} {{- /* This allows us to null out an Application entry by specifying disabled: true in an override file */}}
-{{- else }}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ .name }}-unwrapped
+  name: foo-unwrapped
   namespace: {{ $namespace }}
   labels:
     validatedpatterns.io/pattern: {{ $.Values.global.pattern }}
@@ -20,24 +15,29 @@ spec:
   destination:
     name: {{ $.Values.clusterGroup.targetCluster }}
     namespace: {{ default $namespace .namespace }}
-  project: {{ $projectName }}
-  {{- if .chartVersion }} {{- /* if .chartVersion is set we assume this is a multisource app */}}
+  project: default
   sources:
     - repoURL: {{ $.Values.global.repoURL }}
       {{- /* We do not allow overriding the values with .targetRevision because when we use .targetRevision in a chart to specify the helm
              chart, that revision (e.g. 0.0.1) won't exist in the git tree. So here we simply always take the pattern's git branch/commit */}}
       targetRevision: {{ $.Values.global.targetRevision }}
       ref: patternref
-    - repoURL: {{ coalesce .repoURL $.Values.global.multiSourceRepoUrl }}
-      {{- if .chart }}
-      chart: {{ .chart }}
+      {{/* If we're using the clustergroup chart from a git repo let's use those */}}
+      {{- $clusterGroupGitRepoUrl := "" }}
+      {{- if and $.Values.main $.Values.main.multiSourceConfig }}
+        {{- $clusterGroupGitRepoUrl = $.Values.main.multiSourceConfig.clusterGroupGitRepoUrl }}
+      {{- end }}
+      {{- $clusterGroupChartGitRevision := "" }}
+      {{- if and $.Values.main $.Values.main.multiSourceConfig }}
+        {{- $clusterGroupChartGitRevision = $.Values.main.multiSourceConfig.clusterGroupChartGitRevision }}
+      {{- end }}
+    - repoURL: {{ coalesce $clusterGroupGitRepoUrl $.Values.global.multiSourceRepoUrl }}
+      targetRevision: {{ coalesce $clusterGroupChartGitRevision $.Values.global.multiSourceTargetRevision }}
+      {{- if and $.Values.main $.Values.main.multiSourceConfig (hasKey $.Values.main.multiSourceConfig "clusterGroupGitRepoUrl") }}
+      path: "."
       {{- else }}
-      path: {{ .path }}
-      {{- end }}{{- /* if .chart */}}
-      targetRevision: {{ .chartVersion }}
-      {{- if .plugin }}
-      plugin: {{ .plugin | toPrettyJson }}
-      {{- else }}
+      chart: clustergroup
+      {{- end }}
       helm:
         ignoreMissingValueFiles: true
         values: |
@@ -51,123 +51,10 @@ spec:
         {{- include "clustergroup.app.extravaluefiles" (list . $) | nindent 8 }}
         parameters:
           {{- include "clustergroup.app.globalvalues.helmparameters" $ | nindent 10 }}
-          {{- range .extraHubClusterDomainFields }}
-          - name: {{ . }}
-            value: {{ $.Values.global.hubClusterDomain }}
-          {{- end }}
-          {{- range .extraLocalClusterDomainFields }}
-          - name: {{ . }}
-            value: {{ $.Values.global.localClusterDomain }}
-          {{- end }}
-          {{- range .extraRepoURLFields }}
-          - name: {{ . }}
-            value: $ARGOCD_APP_SOURCE_REPO_URL
-          {{- end }}
-          {{- range .extraTargetRevisionFields }}
-          - name: {{ . }}
-            value: $ARGOCD_APP_SOURCE_TARGET_REVISION
-          {{- end }}
-          {{- range .extraNamespaceFields }}
-          - name: {{ . }}
-            value: $ARGOCD_APP_NAMESPACE
-          {{- end }}
           {{- range .extraPatternNameFields }}
           - name: {{ . }}
             value: {{ $.Values.global.pattern }}
           {{- end }}
-          {{- range $k, $v := $.Values.extraParametersNested }}
-          - name: {{ $k }}
-            value: {{ printf "%s" $v | quote }}
-          {{- end }}
-          {{- range .overrides }}
-          - name: {{ .name }}
-            value: {{ tpl (toString .value) $ | quote }}
-          {{- if .forceString }}
-            forceString: true
-          {{- end }}
-          {{- end }}{{- /* range .overrides */}}
-        {{- if .fileParameters }}
-        fileParameters:
-        {{- range .fileParameters }}
-          - name: {{ .name }}
-            path: {{ .path }}
-        {{- end }}
-        {{- end }}{{- /* if .fileParameters */}}
-      {{- end }}{{- /* if .plugin */}}
-  {{- else }} {{- /* if .chartVersion */}}
-  source:
-    repoURL: {{ coalesce .repoURL $.Values.global.repoURL }}
-    targetRevision: {{ coalesce .targetRevision $.Values.global.targetRevision }}
-    {{- if .chart }}
-    chart: {{ .chart }}
-    {{- else }}
-    path: {{ .path }}
-    {{- end }}{{- /* if .chart */}}
-    {{- if .plugin }}
-    plugin: {{ .plugin | toPrettyJson }}
-    {{- else if not .kustomize }}
-    helm:
-      ignoreMissingValueFiles: true
-      values: |
-        extraParametersNested:
-          {{- range $k, $v := $.Values.extraParametersNested }}
-            {{ $k }}: {{ printf "%s" $v | quote }}
-          {{- end }}
-      valueFiles:
-      {{- include "clustergroup.app.globalvalues.valuefiles" $ | nindent 6 }}
-      {{/* We cannot use the clustergroup.sharedvaluefiles/extravaluefiles because there is no prefix when not using multisource */}}
-      {{- range $valueFile := $.Values.clusterGroup.sharedValueFiles }}
-      - {{ tpl $valueFile $ | quote }}
-      {{- end }}
-      {{- range $valueFile := .extraValueFiles }}
-      - {{ tpl $valueFile $ | quote }}
-      {{- end }}
-      parameters:
-        {{- include "clustergroup.app.globalvalues.helmparameters" $ | nindent 8 }}
-        {{- range .extraHubClusterDomainFields }}
-        - name: {{ . }}
-          value: {{ $.Values.global.hubClusterDomain }}
-        {{- end }}
-        {{- range .extraLocalClusterDomainFields }}
-        - name: {{ . }}
-          value: {{ $.Values.global.localClusterDomain }}
-        {{- end }}
-        {{- range .extraRepoURLFields }}
-        - name: {{ . }}
-          value: $ARGOCD_APP_SOURCE_REPO_URL
-        {{- end }}
-        {{- range .extraTargetRevisionFields }}
-        - name: {{ . }}
-          value: $ARGOCD_APP_SOURCE_TARGET_REVISION
-        {{- end }}
-        {{- range .extraNamespaceFields }}
-        - name: {{ . }}
-          value: $ARGOCD_APP_NAMESPACE
-        {{- end }}
-        {{- range .extraPatternNameFields }}
-        - name: {{ . }}
-          value: {{ $.Values.global.pattern }}
-        {{- end }}
-        {{- range $k, $v := $.Values.extraParametersNested }}
-        - name: {{ $k }}
-          value: {{ printf "%s" $v | quote }}
-        {{- end }}
-        {{- range .overrides }}
-        - name: {{ .name }}
-          value: {{ tpl (toString .value) $ | quote }}
-          {{- if .forceString }}
-          forceString: true
-          {{- end }}
-        {{- end }}{{- /* range .overrides */}}
-      {{- if .fileParameters }}
-      fileParameters:
-      {{- range .fileParameters }}
-        - name: {{ .name }}
-          path: {{ .path }}
-      {{- end }}{{- /* range .fileParameters */}}
-      {{- end }}{{- /* if .fileParameters */}}
-    {{- end }}{{- /* if .plugin */}}
-  {{- end }}{{- /* if .chartVersion */}}
   {{- if .ignoreDifferences }}
   ignoreDifferences: {{ .ignoreDifferences | toPrettyJson }}
   {{- end }}
@@ -187,7 +74,4 @@ spec:
     retry:
       limit: {{ default 20 $.Values.global.options.applicationRetryLimit }}
   {{- end }}{{- /* .syncPolicy */}}
-{{- end }}{{- /* if .disabled */}}
-{{- end }}{{- /* if . (skip null applications) */}}
-{{- end }}{{- /* range .Values.clusterGroup.applications */}}
 {{- end }}{{- /* if ($.Values.global.deletePattern | default "0" | int | ne 1) */}}
