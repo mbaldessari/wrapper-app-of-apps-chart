@@ -49,12 +49,12 @@ spec:
             {{ $k }}: {{ printf "%s" $v | quote }}
           {{- end }}
         valueFiles:
-        {{- include "acm.app.policies.multisourcevaluefiles" . | nindent 24 }}
+        {{- include "acm.app.policies.multisourcevaluefiles" . | nindent 8 }}
         {{- range $valueFile := .extraValueFiles }}
         - {{ $valueFile | quote }}
         {{- end }}
         parameters:
-        {{- include "acm.app.policies.helmparameters" $ | nindent 24 }}
+        {{- include "acm.app.policies.helmparameters" $ | nindent 8 }}
         - name: clusterGroup.name
           value: {{ $group.name }}
         {{- range $k, $v := $.Values.extraParametersNested }}
@@ -85,12 +85,12 @@ spec:
           {{ $k }}: {{ printf "%s" $v | quote }}
         {{- end }}
       valueFiles:
-      {{- include "acm.app.policies.valuefiles" . | nindent 22 }}
+      {{- include "acm.app.policies.valuefiles" . | nindent 6 }}
       {{- range $valueFile := .extraValueFiles }}
       - {{ $valueFile | quote }}
       {{- end }}
       parameters:
-      {{- include "acm.app.policies.helmparameters" $ | nindent 22 }}
+      {{- include "acm.app.policies.helmparameters" $ | nindent 6 }}
       - name: clusterGroup.name
         value: {{ $group.name }}
       {{- range $k, $v := $.Values.extraParametersNested }}
