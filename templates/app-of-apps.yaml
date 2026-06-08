@@ -13,7 +13,7 @@ metadata:
   - resources-finalizer.argocd.argoproj.io/foreground
 spec:
   destination:
-    name: {{ $.Values.clusterGroup.targetCluster }}
+    name: in-cluster
     namespace: {{ default $namespace .namespace }}
   project: default
   sources:
