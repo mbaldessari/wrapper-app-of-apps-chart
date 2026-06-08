@@ -4,7 +4,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: foo-unwrapped
+  name: {{ $.Values.global.pattern }}-{{ .name }}
   namespace: {{ $namespace }}
   labels:
     validatedpatterns.io/pattern: {{ $.Values.global.pattern }}
